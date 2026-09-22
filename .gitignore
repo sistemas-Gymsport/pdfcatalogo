@@ -1,0 +1,28 @@
+# Dependencias
+node_modules/
+
+# Chromium descargado por Puppeteer (se vuelve a descargar en el build de Render)
+.cache/
+**/.cache/
+
+# Builds
+dist/
+
+# Variables de entorno (NUNCA subir secretos)
+.env
+.env.*
+!.env.example
+!.env.test.example
+
+# Tests / cobertura
+coverage/
+
+# Logs
+*.log
+
+# Sistema / editores
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/

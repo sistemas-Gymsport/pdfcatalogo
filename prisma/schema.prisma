@@ -1,0 +1,168 @@
+// Esquema de base de datos de pdfcatalogo (PostgreSQL / Neon).
+// Todas las medidas de página y elementos se guardan en milímetros (mm).
+// Los tamaños tipográficos se guardan en puntos (pt).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String
+  role         Role       @default(ADMIN)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  catalogs Catalog[]
+  images   Image[]
+}
+
+model Catalog {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+
+  // Formato: NORMAL | ESTRECHO | A4 | CARTA | OFICIO | PERSONALIZADO (ver src/config/pageFormats.js)
+  format       String @default("NORMAL")
+  // PORTRAIT | LANDSCAPE
+  orientation  String @default("PORTRAIT")
+  customWidth  Float? // mm, solo para PERSONALIZADO
+  customHeight Float? // mm, solo para PERSONALIZADO
+
+  marginTop    Float @default(15)
+  marginBottom Float @default(15)
+  marginLeft   Float @default(15)
+  marginRight  Float @default(15)
+
+  colorPrimary    String @default("#F64851")
+  colorSecondary  String @default("#1F2937")
+  colorText       String @default("#111827")
+  colorBackground String @default("#FFFFFF")
+
+  // Se incrementa en cada guardado del documento (control de concurrencia optimista).
+  version Int @default(1)
+
+  ownerId String?
+  owner   User?   @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+
+  pages CatalogPage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
+model CatalogPage {
+  id              String  @id @default(uuid())
+  catalogId       String
+  catalog         Catalog @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+  order           Int
+  name            String?
+  // null = usa el color de fondo del catálogo. Acepta HEX o token (primary, secondary, text, background).
+  backgroundColor String?
+
+  elements PageElement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([catalogId, order])
+}
+
+model PageElement {
+  id     String      @id @default(uuid())
+  pageId String
+  page   CatalogPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  // title | subtitle | text | textBlock | image | line | rectangle (ver src/config/elementTypes.js)
+  type String
+
+  // Geometría en mm, relativa a la esquina superior izquierda de la página.
+  x        Float
+  y        Float
+  width    Float
+  height   Float
+  rotation Float @default(0)
+  zIndex   Int   @default(0)
+
+  locked Boolean @default(false)
+  hidden Boolean @default(false)
+
+  content String?
+
+  // Tipografía
+  fontSize      Float? // pt
+  fontFamily    String?
+  fontWeight    Int?
+  fontStyle     String?
+  lineHeight    Float?
+  letterSpacing Float? // pt
+  textAlign     String?
+  verticalAlign String?
+
+  // Colores: HEX (#RRGGBB) o token del catálogo (primary, secondary, text, background)
+  color           String?
+  backgroundColor String?
+
+  // Bordes y caja
+  borderWidth  Float? // mm
+  borderColor  String?
+  borderStyle  String?
+  borderRadius Float? // mm
+  padding      Float? // mm
+  opacity      Float?
+
+  // Imagen
+  imageId   String?
+  image     Image?  @relation(fields: [imageId], references: [id], onDelete: SetNull)
+  objectFit String?
+
+  // Propiedades adicionales para futuros tipos de elemento.
+  props Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pageId])
+  @@index([imageId])
+}
+
+model Image {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  url         String
+  publicId    String  @unique
+  width       Int
+  height      Int
+  format      String?
+  bytes       Int?
+
+  uploadedById String?
+  uploadedBy   User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  elements PageElement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+}
